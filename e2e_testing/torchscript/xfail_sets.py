@@ -93,6 +93,7 @@ TOSA_PASS_SET = {
     "ElementwiseReciprocalModule_basic",
     "TypePromotionAlphaWiderModule_basic",
     "Conv2dWithPaddingDilationStrideStaticModule_basic",
+    "BatchMlpLayerModule_basic",
     "BatchNorm1DModule_basic",
     "BatchNorm1DWith2DInputModule_basic",
     "BatchNorm2DModule_basic",
