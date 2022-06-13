@@ -764,6 +764,43 @@ void AtenLenTOp::getCanonicalizationPatterns(RewritePatternSet &patterns,
 }
 
 //===----------------------------------------------------------------------===//
+// AtenAddTensorOp
+//===----------------------------------------------------------------------===//
+
+void AtenAddTensorOp::getCanonicalizationPatterns(RewritePatternSet &patterns,
+                                                  MLIRContext *context) {
+  patterns.add(+[](AtenAddTensorOp op, PatternRewriter &rewriter) {
+    // The lhs and rhs of the add.tensor op should be 0d tensors for the
+    // canonicalization to be carried out.
+    // `aten.add.tensor(self, other, alpha)` is canonicalized to
+    // `aten.add.int(self, aten.mul.int(other, alpha))`.
+
+    ValueTensorLiteralOp lhsScalarValueTensor = op.self().getDefiningOp<ValueTensorLiteralOp>();
+    PrimNumToTensorScalarOp lhsScalarPrimNum = op.self().getDefiningOp<PrimNumToTensorScalarOp>();
+
+    if (!lhsScalarValueTensor && !lhsScalarPrimNum)
+      return failure();
+
+    Value lhs;
+    if (lhsScalarValueTensor) {
+      lhs = lhsScalarValueTensor.result();
+    } else if (lhsScalarPrimNum) {
+      lhs  = lhsScalarPrimNum.a();
+    }
+
+    auto rhsScalar = op.other().getDefiningOp<PrimNumToTensorScalarOp>();
+    if (!rhsScalar)
+      return failure();
+    Value rhs = rhsScalar.a();
+    Value mul = rewriter.create<AtenMulIntOp>(op->getLoc(), rhs, op.alpha());
+    Value add = rewriter.create<AtenAddIntOp>(op->getLoc(), lhs, mul);
+    rewriter.replaceOpWithNewOp<PrimNumToTensorScalarOp>(
+        op, op.self().getType(), add);
+    return success();
+  });
+}
+
+//===----------------------------------------------------------------------===//
 // AtenSizeOp
 //===----------------------------------------------------------------------===//
 
