@@ -20,6 +20,7 @@
 #include "llvm/ADT/StringMap.h"
 #include "llvm/Support/Casting.h"
 
+
 using namespace mlir;
 using namespace mlir::torch;
 using namespace mlir::torch::Torch;
@@ -96,6 +97,23 @@ static IntegerAttr getI64IntegerAttr(MLIRContext *context, int64_t value) {
 
 static FloatAttr getF64FloatAttr(MLIRContext *context, double value) {
   return FloatAttr::get(Float64Type::get(context), value);
+}
+
+static llvm::Optional<Value> getScalarValue(AtenAddTensorOp op, PatternRewriter &rewriter){
+
+    ValueTensorLiteralOp  lhsValueTensorLiteralOp = op.self().getDefiningOp<ValueTensorLiteralOp>();
+    PrimNumToTensorScalarOp lhsPrimNumToTensorScalarOp = op.self().getDefiningOp<PrimNumToTensorScalarOp>();
+    Value lhs;
+    if (!lhsValueTensorLiteralOp && !lhsPrimNumToTensorScalarOp)
+      return llvm::None;
+
+    if (lhsValueTensorLiteralOp && getTensorRank(lhsValueTensorLiteralOp.getResult()) == 0) {
+      auto  val = lhsValueTensorLiteralOp.value().cast<ElementsAttr>().cast<DenseElementsAttr>().getSplatValue<int64_t>();
+      lhs = rewriter.create<Torch::ConstantIntOp>(op.getLoc(),rewriter.getI64IntegerAttr(val));
+    } else if (lhsPrimNumToTensorScalarOp) {
+      lhs  = lhsPrimNumToTensorScalarOp.a();
+    }
+    return lhs;
 }
 
 //===----------------------------------------------------------------------===//
@@ -775,18 +793,10 @@ void AtenAddTensorOp::getCanonicalizationPatterns(RewritePatternSet &patterns,
     // `aten.add.tensor(self, other, alpha)` is canonicalized to
     // `aten.add.int(self, aten.mul.int(other, alpha))`.
 
-    ValueTensorLiteralOp lhsScalarValueTensor = op.self().getDefiningOp<ValueTensorLiteralOp>();
-    PrimNumToTensorScalarOp lhsScalarPrimNum = op.self().getDefiningOp<PrimNumToTensorScalarOp>();
+    llvm::Optional<Value> lhs = getScalarValue(op, rewriter);
 
-    if (!lhsScalarValueTensor && !lhsScalarPrimNum)
+    if (!lhs.hasValue())
       return failure();
-
-    Value lhs;
-    if (lhsScalarValueTensor) {
-      lhs = lhsScalarValueTensor.result();
-    } else if (lhsScalarPrimNum) {
-      lhs  = lhsScalarPrimNum.a();
-    }
 
     auto rhsScalar = op.other().getDefiningOp<PrimNumToTensorScalarOp>();
     if (!rhsScalar)
