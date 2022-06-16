@@ -459,7 +459,7 @@ OpFoldResult DerefineOp::fold(ArrayRef<Attribute> operands) {
 }
 
 void DerefineOp::getCanonicalizationPatterns(
-  RewritePatternSet &patterns, MLIRContext *context) {
+    RewritePatternSet &patterns, MLIRContext *context) {
   patterns.add(+[](DerefineOp op, PatternRewriter &rewriter) {
     bool madeChange = false;
     for (OpOperand &use : llvm::make_early_inc_range(op->getUses())) {
