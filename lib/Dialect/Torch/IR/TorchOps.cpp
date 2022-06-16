@@ -19,7 +19,6 @@
 #include "torch-mlir/Dialect/Torch/Utils/Utils.h"
 #include "llvm/ADT/BitVector.h"
 #include "llvm/ADT/StringMap.h"
-#include "llvm/Analysis/BlockFrequencyInfoImpl.h"
 #include "llvm/Support/Casting.h"
 
 using namespace mlir;
@@ -459,8 +458,8 @@ OpFoldResult DerefineOp::fold(ArrayRef<Attribute> operands) {
   return nullptr;
 }
 
-void DerefineOp::getCanonicalizationPatterns(RewritePatternSet &patterns,
-                                             MLIRContext *context) {
+void DerefineOp::getCanonicalizationPatterns(
+  RewritePatternSet &patterns, MLIRContext *context) {
   patterns.add(+[](DerefineOp op, PatternRewriter &rewriter) {
     bool madeChange = false;
     for (OpOperand &use : llvm::make_early_inc_range(op->getUses())) {
