@@ -6,9 +6,11 @@
 import string
 from typing import List, Optional, Any, Tuple, Union
 
-import os
 import argparse
+import importlib
 import inspect
+import os
+import re
 
 import torch
 from torch import device, Tensor
@@ -759,6 +761,9 @@ def aten〇div〇Tensor(self: List[int], other: List[int]) -> List[int]:
 def aten〇div〇Tensor_mode(self: List[int], other: List[int], rounding_mode: Optional[str]) -> List[int]:
     return upstream_shape_functions.broadcast(self, other)
 
+def aten〇floor_divide(self: List[int], other: List[int]) -> List[int]:
+    return upstream_shape_functions.broadcast(self, other)
+
 def aten〇__and__〇Tensor(self: List[int], other: List[int]) -> List[int]:
     return upstream_shape_functions.broadcast(self, other)
 
@@ -1029,6 +1034,10 @@ def aten〇linalg_vector_norm(self: List[int], ord: float = 2, dim: Optional[Lis
         dim = list(range(len(self)))
     return upstream_shape_functions.mean_dim(self, dim, keepdim, dtype)
 
+# TODO: Re-enable after MacOS support is fixed for the extension.
+#def _torch_mlir_custom_op_example〇identity(t: List[int]) -> List[int]:
+#    return upstream_shape_functions.unary(t)
+
 # ==============================================================================
 # Shape library generator main().
 # ==============================================================================
@@ -1049,7 +1058,17 @@ def _verify_signature_matches_registry(f, registry: Registry):
     if signature != expected_signature:
         raise ValueError(f"Signature mismatch for {f.__name__!r}: expected {expected_signature!r}, got {signature!r}")
 
+def _maybe_import_op_extensions(args: argparse.Namespace):
+    extension_string = str.strip(args.pytorch_op_extensions)
+    if len(extension_string) > 0:
+        extension_names = extension_string.split(",")
+        for name in extension_names:
+            # Registration of new PyTorch ops should be a side-effect of
+            # importing these modules, so we don't need the return value.
+            importlib.import_module(name)
+
 def main(args):
+    _maybe_import_op_extensions(args)
     mb = ModuleBuilder()
     # We use the registry to ensure that the shape functions are consistent
     # with the ops.
@@ -1068,12 +1087,15 @@ def main(args):
     pm.run(mb.module)
     # Munge the IR a bit to make it more systematically accessible.
     asm = mb.module.operation.get_asm()
+    # We'd like a unique function prefix to avoid collisions with user-
+    # defined symbols. Since all of our shape functions conveniently have
+    # a `〇` in them, we replace the torch namespace with our prefix. E.g.:
+    # __torch__.aten〇add〇Scalar -> __torch_mlir_shape_fn.aten〇add〇Scalar
+    asm = re.sub(r"__torch__\.([^.(]+)\\E3\\80\\87",
+                 r"__torch_mlir_shape_fn.\1\\E3\\80\\87",
+                 asm) 
     # Put the `〇` back to a regular `.`.
     asm = asm.replace("\\E3\\80\\87", ".")
-    # Use a unique prefix on functon names to avoid collisions with
-    # user-defined symbols.
-    asm = asm.replace("__torch__.aten", "__torch_mlir_shape_fn.aten")
-    asm = asm.replace("__torch__.prim", "__torch_mlir_shape_fn.prim")
 
     # Write out the shape library .cpp file.
     shape_lib_cpp_file = os.path.join(
@@ -1121,6 +1143,11 @@ def _create_argparse() -> argparse.ArgumentParser:
         "--torch_transforms_cpp_dir",
         required=True,
         help="Directory containing the Torch transforms cpp files")
+    parser.add_argument(
+        "--pytorch_op_extensions",
+        type=str,
+        default="",
+        help="An optional, comma-separated list of Python modules which register additional PyTorch operators upon being imported. These modules can be used to build a torch-mlir which supports PyTorch extensions.")
     return parser
 
 if __name__ == "__main__":
