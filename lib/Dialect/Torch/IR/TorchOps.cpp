@@ -765,7 +765,7 @@ void AtenLenTOp::getCanonicalizationPatterns(RewritePatternSet &patterns,
 }
 
 static llvm::Optional<Value> getScalarValue(Operation *base_op,
-                                            AtenAddTensorOp op,
+                                            Location loc,
                                             PatternRewriter &rewriter) {
 
   llvm::Optional<Value> scalar;
@@ -778,11 +778,11 @@ static llvm::Optional<Value> getScalarValue(Operation *base_op,
                      .cast<DenseElementsAttr>()
                      .getSplatValue<int64_t>();
       scalar = rewriter.create<Torch::ConstantIntOp>(
-          op.getLoc(), rewriter.getI64IntegerAttr(val));
+          loc, rewriter.getI64IntegerAttr(val));
       return scalar;
     }
   } else if (PrimNumToTensorScalarOp primNumToTensorScalarOp =
-                 dyn_cast<PrimNumToTensorScalarOp>(op)) {
+                 dyn_cast<PrimNumToTensorScalarOp>(base_op)) {
     scalar = primNumToTensorScalarOp.a();
     return scalar;
   }
@@ -801,35 +801,40 @@ void AtenAddTensorOp::getCanonicalizationPatterns(RewritePatternSet &patterns,
     // `aten.add.tensor(self, other, alpha)` is canonicalized to
     // `aten.add.int(self, aten.mul.int(other, alpha))`.
 
-    ValueTensorLiteralOp lhsValueTensorLiteralOp =
+    Operation *lhsValueTensorLiteralOp =
         op.self().getDefiningOp<ValueTensorLiteralOp>();
-    PrimNumToTensorScalarOp lhsPrimNumToTensorScalarOp =
+    Operation *lhsPrimNumToTensorScalarOp =
         op.self().getDefiningOp<PrimNumToTensorScalarOp>();
-    PrimNumToTensorScalarOp rhsValueTensorLiteralOp =
-        op.other().getDefiningOp<PrimNumToTensorScalarOp>();
 
     llvm::Optional<Value> lhs;
-    llvm::Optional<Value> rhs;
 
-    if (!lhsValueTensorLiteralOp && !lhsPrimNumToTensorScalarOp)
+    if (lhsValueTensorLiteralOp)
+      lhs = getScalarValue(lhsValueTensorLiteralOp, op.getLoc(), rewriter);
+    else if (lhsPrimNumToTensorScalarOp)
+      lhs = getScalarValue(lhsPrimNumToTensorScalarOp, op.getLoc(), rewriter);
+    else
       return failure();
 
-    if (!lhsValueTensorLiteralOp) {
-      lhs = getScalarValue(lhsValueTensorLiteralOp, rewriter, op);
-    } else if (!lhsPrimNumToTensorScalarOp) {
-      lhs = getScalarValue(lhsPrimNumToTensorScalarOp, rewriter, op);
-    }
+    llvm::Optional<Value> rhs;
+    Operation *rhsValueTensorLiteralOp =
+        op.other().getDefiningOp<ValueTensorLiteralOp>();
+    Operation *rhsPrimNumToTensorScalarOp =
+        op.other().getDefiningOp<PrimNumToTensorScalarOp>();
 
-    if (!rhsValueTensorLiteralOp)
-      rhs = getScalarValue(rhsValueTensorLiteralOp, rewriter, op);
+    if (rhsValueTensorLiteralOp)
+      rhs = getScalarValue(rhsValueTensorLiteralOp, op.getLoc(), rewriter);
+    else if (rhsPrimNumToTensorScalarOp)
+      rhs = getScalarValue(rhsPrimNumToTensorScalarOp, op.getLoc(), rewriter);
     else
       return failure();
 
     if (!lhs.hasValue() || !rhs.hasValue())
       return failure();
 
-    Value mul = rewriter.create<AtenMulIntOp>(op->getLoc(), rhs, op.alpha());
-    Value add = rewriter.create<AtenAddIntOp>(op->getLoc(), lhs, mul);
+    Value mul =
+        rewriter.create<AtenMulIntOp>(op->getLoc(), rhs.getValue(), op.alpha());
+    Value add =
+        rewriter.create<AtenAddIntOp>(op->getLoc(), lhs.getValue(), mul);
     rewriter.replaceOpWithNewOp<PrimNumToTensorScalarOp>(
         op, op.self().getType(), add);
     return success();
