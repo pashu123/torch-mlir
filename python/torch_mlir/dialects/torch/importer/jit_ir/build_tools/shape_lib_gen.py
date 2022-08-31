@@ -316,6 +316,12 @@ def not_present_in_registry(f):
 def aten〇triu(self: List[int], diagonal: int = 0) -> List[int]:
     return upstream_shape_functions.unary(self)
 
+def aten〇resolve_conj(self: List[int]) -> List[int]:
+    return upstream_shape_functions.unary(self)
+
+def aten〇resolve_neg(self: List[int]) -> List[int]:
+    return upstream_shape_functions.unary(self)
+
 def aten〇tanh(self: List[int]) -> List[int]:
     return upstream_shape_functions.unary(self)
 

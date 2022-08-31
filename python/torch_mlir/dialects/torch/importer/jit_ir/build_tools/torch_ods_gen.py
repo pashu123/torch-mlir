@@ -419,6 +419,8 @@ def emit_ops(emitter_td: TextEmitter, registry: Registry):
     emit("aten::all : (Tensor) -> (Tensor)")
     emit("aten::all.bool : (bool[]) -> (bool)")
     emit("aten::any : (Tensor) -> (Tensor)")
+    emit("aten::resolve_conj : (Tensor) -> (Tensor)", has_folder=True)
+    emit("aten::resolve_neg : (Tensor) -> (Tensor)", has_folder=True)
     emit("aten::any.dim : (Tensor, int, bool) -> (Tensor)")
     emit("aten::arange : (Scalar, int?, int?, Device?, bool?) -> (Tensor)")
     emit("aten::arange.start : (Scalar, Scalar, int?, int?, Device?, bool?) -> (Tensor)")

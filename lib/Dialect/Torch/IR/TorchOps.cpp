@@ -781,6 +781,44 @@ OpFoldResult AtenViewOp::fold(ArrayRef<Attribute> operands) {
 }
 
 //===----------------------------------------------------------------------===//
+// AtenResolveConjOp
+//===----------------------------------------------------------------------===//
+
+OpFoldResult AtenResolveNegOp::fold(ArrayRef<Attribute> operands) {
+  auto inputType = getOperand().getType().dyn_cast<BaseTensorType>();
+  if (!inputType)
+    return nullptr;
+  auto resType = getType().dyn_cast<BaseTensorType>();
+  if (!resType)
+    return nullptr;
+  // Fold when both the input tensor and result are unity rank tensors.
+  if (resType.getDtype().isa<mlir::FloatType>() ||
+      resType.getDtype().isa<mlir::IntegerType>())
+    return getOperand();
+
+  return nullptr;
+}
+
+//===----------------------------------------------------------------------===//
+// AtenResolveNegOp
+//===----------------------------------------------------------------------===//
+
+OpFoldResult AtenResolveConjOp::fold(ArrayRef<Attribute> operands) {
+  auto inputType = getOperand().getType().dyn_cast<BaseTensorType>();
+  if (!inputType)
+    return nullptr;
+  auto resType = getType().dyn_cast<BaseTensorType>();
+  if (!resType)
+    return nullptr;
+  // Fold when both the input tensor and result are unity rank tensors.
+  if (resType.getDtype().isa<mlir::FloatType>() ||
+      resType.getDtype().isa<mlir::IntegerType>())
+    return getOperand();
+
+  return nullptr;
+}
+
+//===----------------------------------------------------------------------===//
 // AtenDimOp
 //===----------------------------------------------------------------------===//
 
