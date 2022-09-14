@@ -705,3 +705,21 @@ class Conv_Transpose3dModule(torch.nn.Module):
 @register_test_case(module_factory=lambda: Conv_Transpose3dModule())
 def Conv_Transpose3dModule_basic(module, tu: TestUtils):
     module.forward(torch.randn(5, 2, 5, 6, 4), torch.randn(2, 5, 2, 2, 2))
+
+
+class UpSampleNearest2d(torch.nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([None, ([2, 3, 2, 2], torch.float32, True)])
+    def forward(self, inputVec):
+        return torch._C._nn.upsample_nearest2d(inputVec,
+                                                     output_size=None,
+                                                     scale_factors=[2.0, 2.0])
+
+
+@register_test_case(module_factory=lambda: UpSampleNearest2d())
+def UpSampleNearest2d_basic(module, tu: TestUtils):
+    module.forward(torch.randn(2, 3, 2, 2))

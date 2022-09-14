@@ -1192,6 +1192,31 @@ def aten〇linalg_vector_norm(self: List[int], ord: float = 2, dim: Optional[Lis
 def aten〇frobenius_norm〇dim(self: List[int], dim: List[int], keepdim: bool = False) -> List[int]:
     return upstream_shape_functions.sum_mean_dim(self, dim, keepdim, 0)
 
+def aten〇upsample_nearest2d〇vec(input: List[int], output_size: Optional[List[int]], scale_factors: Optional[List[float]]) -> List[int]:
+    out: List[int] = []
+    out.append(input[0])
+    out.append(input[1])
+    if output_size is not None:
+        assert (
+            scale_factors is None
+        ), "Must specify exactly one of output_size and scale_factors"
+        assert len(output_size) == 2
+        out.append(output_size[0])
+        out.append(output_size[1])
+        return out
+
+    if scale_factors is not None:
+        assert (
+            output_size is None
+        ), "Must specify exactly one of output_size and scale_factors"
+        assert len(scale_factors) == 2
+        out.append(int(input[2] * scale_factors[0]))
+        out.append(int(input[3] * scale_factors[1]))
+        return out
+
+    assert 0, "Either output_size or scale_factors must be presented"
+    return out
+
 # ==============================================================================
 # Shape library generator main().
 # ==============================================================================

@@ -6980,6 +6980,81 @@ module {
     %2 = call @__torch__.torch.jit._shape_functions.sum_mean_dim(%arg0, %0, %arg2, %1) : (!torch.list<int>, !torch.optional<list<int>>, !torch.bool, !torch.any) -> !torch.list<int>
     return %2 : !torch.list<int>
   }
+  func.func @"__torch_mlir_shape_fn.aten.upsample_nearest2d.vec"(%arg0: !torch.list<int>, %arg1: !torch.optional<list<int>>, %arg2: !torch.optional<list<float>>) -> !torch.list<int> {
+    %str = torch.constant.str "AssertionError: Either output_size or scale_factors must be presented"
+    %str_0 = torch.constant.str "AssertionError: "
+    %str_1 = torch.constant.str "AssertionError: Must specify exactly one of output_size and scale_factors"
+    %none = torch.constant.none
+    %int0 = torch.constant.int 0
+    %int1 = torch.constant.int 1
+    %int2 = torch.constant.int 2
+    %int3 = torch.constant.int 3
+    %0 = torch.prim.ListConstruct  : () -> !torch.list<int>
+    %1 = torch.aten.__getitem__.t %arg0, %int0 : !torch.list<int>, !torch.int -> !torch.int
+    %2 = torch.aten.append.t %0, %1 : !torch.list<int>, !torch.int -> !torch.list<int>
+    %3 = torch.aten.__getitem__.t %arg0, %int1 : !torch.list<int>, !torch.int -> !torch.int
+    %4 = torch.aten.append.t %0, %3 : !torch.list<int>, !torch.int -> !torch.list<int>
+    %5 = torch.aten.__isnot__ %arg1, %none : !torch.optional<list<int>>, !torch.none -> !torch.bool
+    torch.prim.If %5 -> () {
+      %6 = torch.prim.unchecked_cast %arg1 : !torch.optional<list<int>> -> !torch.list<int>
+      %7 = torch.aten.__is__ %arg2, %none : !torch.optional<list<float>>, !torch.none -> !torch.bool
+      torch.prim.If %7 -> () {
+        torch.prim.If.yield
+      } else {
+        torch.prim.RaiseException %str_1, %none : !torch.str, !torch.none
+        torch.prim.If.yield
+      }
+      %8 = torch.aten.len.t %6 : !torch.list<int> -> !torch.int
+      %9 = torch.aten.eq.int %8, %int2 : !torch.int, !torch.int -> !torch.bool
+      torch.prim.If %9 -> () {
+        torch.prim.If.yield
+      } else {
+        torch.prim.RaiseException %str_0, %none : !torch.str, !torch.none
+        torch.prim.If.yield
+      }
+      %10 = torch.aten.__getitem__.t %6, %int0 : !torch.list<int>, !torch.int -> !torch.int
+      %11 = torch.aten.append.t %0, %10 : !torch.list<int>, !torch.int -> !torch.list<int>
+      %12 = torch.aten.__getitem__.t %6, %int1 : !torch.list<int>, !torch.int -> !torch.int
+      %13 = torch.aten.append.t %0, %12 : !torch.list<int>, !torch.int -> !torch.list<int>
+      torch.prim.If.yield
+    } else {
+      %6 = torch.aten.__isnot__ %arg2, %none : !torch.optional<list<float>>, !torch.none -> !torch.bool
+      torch.prim.If %6 -> () {
+        %7 = torch.prim.unchecked_cast %arg2 : !torch.optional<list<float>> -> !torch.list<float>
+        %8 = torch.aten.__is__ %arg1, %none : !torch.optional<list<int>>, !torch.none -> !torch.bool
+        torch.prim.If %8 -> () {
+          torch.prim.If.yield
+        } else {
+          torch.prim.RaiseException %str_1, %none : !torch.str, !torch.none
+          torch.prim.If.yield
+        }
+        %9 = torch.aten.len.t %7 : !torch.list<float> -> !torch.int
+        %10 = torch.aten.eq.int %9, %int2 : !torch.int, !torch.int -> !torch.bool
+        torch.prim.If %10 -> () {
+          torch.prim.If.yield
+        } else {
+          torch.prim.RaiseException %str_0, %none : !torch.str, !torch.none
+          torch.prim.If.yield
+        }
+        %11 = torch.aten.__getitem__.t %arg0, %int2 : !torch.list<int>, !torch.int -> !torch.int
+        %12 = torch.aten.__getitem__.t %7, %int0 : !torch.list<float>, !torch.int -> !torch.float
+        %13 = torch.operator "aten.mul.int_float"(%11, %12) : (!torch.int, !torch.float) -> !torch.float
+        %14 = torch.aten.Int.float %13 : !torch.float -> !torch.int
+        %15 = torch.aten.append.t %0, %14 : !torch.list<int>, !torch.int -> !torch.list<int>
+        %16 = torch.aten.__getitem__.t %arg0, %int3 : !torch.list<int>, !torch.int -> !torch.int
+        %17 = torch.aten.__getitem__.t %7, %int1 : !torch.list<float>, !torch.int -> !torch.float
+        %18 = torch.operator "aten.mul.int_float"(%16, %17) : (!torch.int, !torch.float) -> !torch.float
+        %19 = torch.aten.Int.float %18 : !torch.float -> !torch.int
+        %20 = torch.aten.append.t %0, %19 : !torch.list<int>, !torch.int -> !torch.list<int>
+        torch.prim.If.yield
+      } else {
+        torch.prim.RaiseException %str, %none : !torch.str, !torch.none
+        torch.prim.If.yield
+      }
+      torch.prim.If.yield
+    }
+    return %0 : !torch.list<int>
+  }
 }
 )mlir");
 #pragma clang diagnostic pop
