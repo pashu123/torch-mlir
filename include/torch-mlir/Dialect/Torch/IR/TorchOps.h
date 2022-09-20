@@ -151,6 +151,37 @@ m_TorchConstantIntList(SmallVectorImpl<int64_t> &bind_values) {
 }
 
 namespace detail {
+/// Matches the constant integers stored in a `torch.ListConstruct`.
+struct torch_list_construct_float_op_binder {
+  SmallVectorImpl<double> &bind_values;
+
+  /// Creates a matcher instance that binds the value to bvs if match succeeds.
+  torch_list_construct_float_op_binder(SmallVectorImpl<double> &bvs)
+      : bind_values(bvs) {}
+
+  bool match(Operation *op) {
+    auto listConstruct = dyn_cast<Torch::PrimListConstructOp>(op);
+    if (!listConstruct)
+      return false;
+    for (Value value : listConstruct.elements()) {
+      double num;
+      if (matchPattern(value, m_TorchConstantFloat(&num)))
+        bind_values.push_back(num);
+      else
+        return false;
+    }
+    return true;
+  }
+};
+} // namespace detail
+
+/// Matches the constant integers stored in a `torch.prim.ListConstruct`.
+inline detail::torch_list_construct_float_op_binder
+m_TorchConstantFloatList(SmallVectorImpl<double> &bind_values) {
+  return detail::torch_list_construct_float_op_binder(bind_values);
+}
+
+namespace detail {
 /// Matches the expected tensor and dim from `torch.aten.size.int`.
 struct torch_tensor_size_int_op_binder {
   int64_t *dim;

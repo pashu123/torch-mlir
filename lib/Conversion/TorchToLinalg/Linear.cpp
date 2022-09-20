@@ -152,6 +152,120 @@ public:
 };
 } // namespace
 
+
+    //N,C,H,W = input.shape
+    //out_tensor = torch.zeros(N,C, int(scale_factor[0]*H), int(scale_factor[1]*W))
+
+    //for i in range(N):
+        //for j in range(C):
+            //for k in range(H):
+                //for l in range(W):
+                    //for m in range(scale_factor[0]):
+                        //for n in range(scale_factor[1]):
+                            //out_tensor[i,j,(k*scale_factor[0])+m,(l*scale_factor[1])+n] = input[i,j,k,l]
+    //return out_tensor
+
+namespace {
+class ConvertAtenUpsampleNearest2dVecOp
+    : public OpConversionPattern<AtenUpsampleNearest2dVecOp> {
+
+public:
+  using OpConversionPattern::OpConversionPattern;
+  LogicalResult
+  matchAndRewrite(AtenUpsampleNearest2dVecOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+
+    Location loc = op->getLoc();
+    MLIRContext *context = op.getContext();
+    Value input = adaptor.input();
+    op.dump();
+
+    Type resultType = getTypeConverter()->convertType(op.getType());
+    auto resType = resultType.cast<RankedTensorType>();
+
+    auto inputRank = input.getType().cast<RankedTensorType>().getRank();
+    Type elementType =
+        input.getType().cast<RankedTensorType>().getElementType();
+    Value c1 =
+        rewriter.create<arith::ConstantOp>(loc, rewriter.getIndexAttr(1));
+
+    SmallVector<double> scaleFactors;
+    if (!matchPattern(adaptor.scale_factors(),
+                      m_TorchConstantFloatList(scaleFactors)))
+      return rewriter.notifyMatchFailure(op,
+                                         "only constant dim lists supported");
+    SmallVector<Value> scaleFactorsInt;
+
+    for (auto i : scaleFactors)
+      scaleFactorsInt.push_back(rewriter.create<arith::ConstantOp>(
+          loc, rewriter.getI64IntegerAttr((int64_t)i)));
+
+    //// Only used to calculate flipped values, i.e. those on the flip axes. Other
+    //// dims won't be used.
+    SmallVector<Value> dims = getTensorSizes(rewriter, loc, input);
+    Value kernelTensor = rewriter.create<linalg::InitTensorOp>(
+        loc,
+        SmallVector<Value>{castIntToIndex(rewriter, loc, scaleFactorsInt[0]),
+                           castIntToIndex(rewriter, loc, scaleFactorsInt[1])},
+        elementType);
+
+    dims[2] = rewriter.create<arith::MulIOp>(
+        loc, dims[2], castIntToIndex(rewriter, loc, scaleFactorsInt[0]));
+    dims[3] = rewriter.create<arith::MulIOp>(
+        loc, dims[3], castIntToIndex(rewriter, loc, scaleFactorsInt[1]));
+
+
+    Value outTensor =
+        rewriter.create<linalg::InitTensorOp>(loc, dims, elementType);
+
+    SmallVector<AffineExpr> inpExpr;
+    SmallVector<AffineExpr> kernExpr;
+    SmallVector<AffineExpr> outExpr;
+
+    inpExpr.push_back(rewriter.getAffineDimExpr(0));
+    inpExpr.push_back(rewriter.getAffineDimExpr(1));
+    inpExpr.push_back(rewriter.getAffineDimExpr(2));
+    inpExpr.push_back(rewriter.getAffineDimExpr(3));
+
+    outExpr.push_back(rewriter.getAffineDimExpr(0));
+    outExpr.push_back(rewriter.getAffineDimExpr(1));
+    outExpr.push_back(rewriter.getAffineDimExpr(2) * 2 +
+                      rewriter.getAffineDimExpr(4));
+    outExpr.push_back(rewriter.getAffineDimExpr(3) * 2 +
+                      rewriter.getAffineDimExpr(5));
+
+    kernExpr.push_back(rewriter.getAffineDimExpr(4));
+    kernExpr.push_back(rewriter.getAffineDimExpr(5));
+
+    auto indexingMaps =
+          AffineMap::inferFromExprList({inpExpr, kernExpr, outExpr});
+
+
+    SmallVector<StringRef> iteratorTypes(4, "parallel");
+    iteratorTypes.insert(iteratorTypes.end(),
+                           {"reduction", "reduction"});
+
+    Value finalRes =
+        rewriter
+            .create<linalg::GenericOp>(
+                loc, outTensor.getType(),
+                ValueRange{input, kernelTensor}, outTensor,
+                /*indexingMaps=*/indexingMaps,
+                /*iteratorTypes=*/iteratorTypes,
+                [&](OpBuilder &b, Location loc, ValueRange args) {
+                  Value l = args[0];
+                  b.create<linalg::YieldOp>(loc, l);
+                })
+            .getResult(0);
+
+    rewriter.replaceOpWithNewOp<tensor::CastOp>(op, resType,
+                                                finalRes);
+
+    return success();
+  }
+};
+} // namespace
+
 namespace {
 class ConvertAtenMatmulOp : public OpConversionPattern<AtenMatmulOp> {
 public:
@@ -843,4 +957,6 @@ void mlir::torch::torch_to_linalg::populateLinearPatternsAndLegality(
   patterns.add<ConvertAtenBmmOp>(typeConverter, context);
   target.addIllegalOp<AtenConvolutionOp>();
   patterns.add<ConvertAtenConvolutionOp>(typeConverter, context);
+  target.addIllegalOp<AtenUpsampleNearest2dVecOp>();
+  patterns.add<ConvertAtenUpsampleNearest2dVecOp>(typeConverter, context);
 }
