@@ -79,12 +79,14 @@ public:
     if (!isValidDim(dim, inputType.getRank()))
       return rewriter.notifyMatchFailure(maxDimOp, "dim is not a valid dim");
 
+
+    // Input type can be anything.
     Type inElementType = inputType.getElementType();
-    if (!inElementType.isa<mlir::FloatType>()) {
-      return rewriter.notifyMatchFailure(
-          maxDimOp,
-          "aten.max_dim to linalg.* requires Float input element type");
-    }
+    //if (!inElementType.isa<mlir::FloatType>()) {
+      //return rewriter.notifyMatchFailure(
+          //maxDimOp,
+          //"aten.max_dim to linalg.* requires Float input element type");
+    //}
 
     // Constant op to account for the reduction along dim.
     auto c1 = rewriter.create<arith::ConstantIndexOp>(loc, /*value=*/1);
@@ -105,13 +107,30 @@ public:
         rewriter.create<linalg::InitTensorOp>(loc, resultShape, inElementType)
             .result();
 
-    FloatAttr fillValueMaxAttr = rewriter.getFloatAttr(
+    FloatAttr fillValueMaxFloatAttr;
+    IntegerAttr fillValueMaxIntAttr;
+
+    if(inElementType.isa<mlir::FloatType>())
+    fillValueMaxFloatAttr = rewriter.getFloatAttr(
         inElementType,
         APFloat::getLargest(
             inElementType.cast<mlir::FloatType>().getFloatSemantics(), true));
 
-    Value fillValueMax =
-        rewriter.create<arith::ConstantOp>(loc, fillValueMaxAttr);
+    if(inElementType.isa<mlir::IntegerType>())
+        fillValueMaxIntAttr = rewriter.getIntegerAttr(
+            inElementType,
+            APInt::getMaxValue(
+                inElementType.cast<mlir::IntegerType>().getWidth()));
+
+    Value fillValueMax;
+
+    if(inElementType.isa<mlir::FloatType>())
+    fillValueMax =
+        rewriter.create<arith::ConstantOp>(loc, fillValueMaxFloatAttr);
+    if(inElementType.isa<mlir::IntegerType>())
+    fillValueMax =
+        rewriter.create<arith::ConstantOp>(loc, fillValueMaxIntAttr);
+
     Value filledTensorMax =
         rewriter.create<linalg::FillOp>(loc, fillValueMax, initTensorMax)
             .result();
@@ -156,6 +175,9 @@ public:
           if (inElementType.isa<mlir::FloatType>())
             predicate = rewriter.create<arith::CmpFOp>(
                 nestedLoc, arith::CmpFPredicate::OGT, newValue, oldValue);
+          if (inElementType.isa<mlir::IntegerType>())
+            predicate = rewriter.create<arith::CmpIOp>(
+                nestedLoc, arith::CmpIPredicate::sgt, newValue, oldValue);
           auto resultMax = rewriter.create<arith::SelectOp>(
               nestedLoc, predicate, newValue, oldValue);
           auto resultIndex = rewriter.create<arith::SelectOp>(
