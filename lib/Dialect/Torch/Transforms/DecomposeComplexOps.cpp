@@ -2602,7 +2602,7 @@ static LogicalResult calculateVariance(OpTy op, PatternRewriter &rewriter,
   Type outputType = op.getType();
   BaseTensorType outputTensorType = outputType.cast<BaseTensorType>();
   Type newOutputType = outputTensorType.getWithSizesAndDtype(
-      outputTensorType.getSizes(), rewriter.getF64Type());
+      outputTensorType.getSizes(), rewriter.getF32Type());
   if (!inputTensorTy.hasDtype() ||
       !inputTensorTy.getDtype().isa<mlir::FloatType>()) {
     return rewriter.notifyMatchFailure(
@@ -2612,7 +2612,7 @@ static LogicalResult calculateVariance(OpTy op, PatternRewriter &rewriter,
   // Upcasting the input tensor to `F64` dtype for higher precision during the
   // computation of the result.
   if (inputTensorTy.getDtype().getIntOrFloatBitWidth() != 64) {
-    self = convertTensorToDtype(rewriter, loc, self, rewriter.getF64Type());
+    self = convertTensorToDtype(rewriter, loc, self, rewriter.getF32Type());
     inputTensorTy = self.getType().cast<BaseTensorType>();
   }
 

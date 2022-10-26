@@ -931,6 +931,13 @@ static Value createLinalgPayloadCalculationForElementwiseOp(
                      .getElementType();
     return convertScalarToDtype(b, loc, adaptor.value(), dtype);
   }
+  if (auto fillTensor = dyn_cast<AtenFillTensorOp>(op)) {
+    AtenFillTensorOp::Adaptor adaptor(operands);
+    Type dtype = converter->convertType(fillTensor.getType())
+                     .cast<RankedTensorType>()
+                     .getElementType();
+    return convertScalarToDtype(b, loc, payloadArgs[1], dtype);
+  }
   if (auto maskedFillScalar = dyn_cast<AtenMaskedFillScalarOp>(op)) {
     AtenMaskedFillScalarOp::Adaptor adaptor(operands);
     Type dtype = converter->convertType(maskedFillScalar.getType())
@@ -1046,7 +1053,8 @@ public:
              AtenThresholdOp, AtenThresholdBackwardOp, AtenCloneOp, AtenSinOp,
              AtenCosOp, AtenNeScalarOp, AtenNegOp, AtenMaskedFillScalarOp,
              AtenMaskedFillTensorOp, AtenLogicalOrOp, AtenTriuOp,
-             AtenBitwiseNotOp, AtenRoundOp, AtenFillScalarOp>(op))
+             AtenBitwiseNotOp, AtenRoundOp, AtenFillScalarOp, AtenFillTensorOp>(
+            op))
       return rewriter.notifyMatchFailure(op, "not a supported elementwise op");
 
     if (failed(verifyLinalgCompatibleTypes(op, rewriter)))
@@ -1521,7 +1529,8 @@ void mlir::torch::torch_to_linalg::populateUncategorizedPatternsAndLegality(
       AtenEqTensorOp, AtenLtTensorOp, AtenThresholdOp, AtenThresholdBackwardOp,
       AtenCloneOp, AtenSinOp, AtenCosOp, AtenNeScalarOp, AtenMaskedFillScalarOp,
       AtenMaskedFillTensorOp, AtenLogicalOrOp, AtenTriuOp,
-      AtenRemainderScalarOp, AtenBitwiseNotOp, AtenRoundOp, AtenFillScalarOp>();
+      AtenRemainderScalarOp, AtenBitwiseNotOp, AtenRoundOp, AtenFillScalarOp,
+      AtenFillTensorOp>();
   patterns.add<ConvertElementwiseOp>(typeConverter, context);
   target.addIllegalOp<AtenNllLossForwardOp>();
   patterns.add<ConvertAtenDetachOp>(typeConverter, context);

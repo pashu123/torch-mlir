@@ -797,6 +797,9 @@ def aten〇zero(self: List[int]) -> List[int]:
 def aten〇fill〇Scalar(self: List[int], value: float) -> List[int]:
     return self
 
+def aten〇fill〇Tensor(self: List[int], value: List[int]) -> List[int]:
+    return self
+
 def aten〇copy(self: List[int], src: List[int], non_blocking: bool = False) -> List[int]:
     return upstream_shape_functions.unary(self)
 
