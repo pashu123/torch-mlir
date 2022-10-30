@@ -1587,8 +1587,9 @@ void Torch::ConstantFloatOp::getAsmResultNames(
   // identifier syntax. (in practice, this just removes the '+' from 'e+' in
   // float string representation).
   SmallVector<char> buf;
-  value().toString(buf, /*FormatPrecision=*/6, /*FormatMaxPadding=*/0,
-                   /*TruncateZero=*/false);
+  value().dyn_cast<mlir::FloatAttr>().getValue().toString(
+      buf, /*FormatPrecision=*/6, /*FormatMaxPadding=*/0,
+      /*TruncateZero=*/false);
   auto isValidMLIRIdentifierChar = [](char c) {
     return isalpha(c) || isdigit(c) || c == '_' || c == '$' || c == '.' ||
            c == '-';

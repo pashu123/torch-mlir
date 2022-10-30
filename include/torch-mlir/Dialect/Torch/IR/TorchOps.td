@@ -744,7 +744,7 @@ def Torch_ConstantFloatOp : Torch_Op<"constant.float", [
     TODO: Add a `!torch.float` type.
   }];
   let arguments = (ins
-    F64Attr:$value
+    AnyAttrOf<[F64Attr, F32Attr]>:$value
   );
   let results = (outs
     Torch_FloatType:$result

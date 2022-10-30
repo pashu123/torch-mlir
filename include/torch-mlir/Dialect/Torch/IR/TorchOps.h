@@ -54,7 +54,10 @@ struct torch_constant_float_op_binder {
 
   bool match(Operation *op) {
     if (auto constantFloat = dyn_cast<Torch::ConstantFloatOp>(op)) {
-      *bind_value = constantFloat.value().convertToDouble();
+      *bind_value = constantFloat.value()
+                        .dyn_cast<mlir::FloatAttr>()
+                        .getValue()
+                        .convertToDouble();
       return true;
     }
     return false;

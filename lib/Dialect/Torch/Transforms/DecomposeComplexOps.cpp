@@ -116,7 +116,7 @@ static Value createMaxAlongDimension(PatternRewriter &rewriter, Location loc,
 static Value createTensorSub(PatternRewriter &rewriter, Location loc,
                              Type tensorType, Value lhs, Value rhs) {
   Value alpha =
-      rewriter.create<ConstantFloatOp>(loc, rewriter.getF64FloatAttr(1));
+      rewriter.create<ConstantFloatOp>(loc, rewriter.getF32FloatAttr(1));
   Value sub =
       rewriter.create<AtenSubTensorOp>(loc, tensorType, lhs, rhs, alpha);
   return sub;
@@ -1322,7 +1322,7 @@ public:
           op, "only support floating type input for training mode");
     Value noneVal = rewriter.create<ConstantNoneOp>(loc);
     Value floatOne =
-        rewriter.create<ConstantFloatOp>(loc, rewriter.getF64FloatAttr(1.0));
+        rewriter.create<ConstantFloatOp>(loc, rewriter.getF32FloatAttr(1.0));
     Value oneMinusP = rewriter.create<AtenSubFloatOp>(loc, floatOne, prob);
     Value boolMask = rewriter.create<ValsemVariantAtenBernoulliFloatOp>(
         loc, inputType, input, oneMinusP, /*generator=*/noneVal);
@@ -1527,9 +1527,9 @@ public:
     // respectively.
     Value none = rewriter.create<ConstantNoneOp>(loc);
     Value zero =
-        rewriter.create<ConstantFloatOp>(loc, rewriter.getF64FloatAttr(0.0));
+        rewriter.create<ConstantFloatOp>(loc, rewriter.getF32FloatAttr(0.0));
     Value one =
-        rewriter.create<ConstantFloatOp>(loc, rewriter.getF64FloatAttr(1.0));
+        rewriter.create<ConstantFloatOp>(loc, rewriter.getF32FloatAttr(1.0));
     Value emptyTensor = rewriter.create<AtenFullLikeOp>(
         loc, resultType, input, zero, op.dtype(), op.layout(), op.device(),
         op.pin_memory(), op.memory_format());
@@ -2144,7 +2144,7 @@ public:
       return rewriter.notifyMatchFailure(op, "expected bias to be rank 1");
 
     Value alpha =
-        rewriter.create<ConstantFloatOp>(loc, rewriter.getF64FloatAttr(1));
+        rewriter.create<ConstantFloatOp>(loc, rewriter.getF32FloatAttr(1));
     rewriter.replaceOpWithNewOp<AtenAddTensorOp>(op, op.getType(), matmul,
                                                  op.bias(), alpha);
     return success();
@@ -2311,7 +2311,7 @@ class DecomposeAtenPadOp : public OpRewritePattern<AtenPadOp> {
       return rewriter.notifyMatchFailure(op, "optional type not supported");
     if (value.getType().isa<Torch::NoneType>())
       value = rewriter.create<Torch::ConstantFloatOp>(
-          op.getLoc(), rewriter.getF64FloatAttr(0));
+          op.getLoc(), rewriter.getF32FloatAttr(0));
 
     rewriter.replaceOpWithNewOp<AtenConstantPadNdOp>(
         op, op.getType(), op.self(), op.pad(), value);
@@ -2602,7 +2602,7 @@ static LogicalResult calculateVariance(OpTy op, PatternRewriter &rewriter,
   Type outputType = op.getType();
   BaseTensorType outputTensorType = outputType.cast<BaseTensorType>();
   Type newOutputType = outputTensorType.getWithSizesAndDtype(
-      outputTensorType.getSizes(), rewriter.getF64Type());
+      outputTensorType.getSizes(), rewriter.getF32Type());
   if (!inputTensorTy.hasDtype() ||
       !inputTensorTy.getDtype().isa<mlir::FloatType>()) {
     return rewriter.notifyMatchFailure(

@@ -70,7 +70,7 @@ Type Torch::getTypeForTorchType(
   if (type.isa<Torch::IntType>())
     return IntegerType::get(context, 64, signedness);
   if (type.isa<Torch::FloatType>())
-    return Float64Type::get(context);
+    return Float32Type::get(context);
   llvm::report_fatal_error("unhandled type for getTypeForTorchType");
 }
 
@@ -174,7 +174,7 @@ Value Torch::getConstantWithGivenDtypeAndValue(PatternRewriter &rewriter,
         loc, rewriter.getI64IntegerAttr((int64_t)value));
   if (dtype.isF64() || dtype.isF32() || dtype.isF16() || dtype.isBF16())
     return rewriter.create<ConstantFloatOp>(loc,
-                                            rewriter.getF64FloatAttr(value));
+                                            rewriter.getF32FloatAttr(value));
   llvm::report_fatal_error(
       "unhandled type for getConstantWithGivenDtypeAndValue");
 }
