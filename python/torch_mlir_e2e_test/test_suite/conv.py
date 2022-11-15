@@ -714,6 +714,27 @@ class Conv_Transpose3dModule(torch.nn.Module):
 def Conv_Transpose3dModule_basic(module, tu: TestUtils):
     module.forward(torch.randn(5, 2, 5, 6, 4), torch.randn(2, 5, 2, 2, 2))
 
+class UpSampleNearest2d(torch.nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([-1, -1, -1, -1], torch.float64, True),
+    ])
+    def forward(self, input):
+        return torch.ops.aten.upsample_nearest2d(input,
+                                               output_size=[18, 48],
+                                               scales_h=3.0,
+                                               scales_w=4.0)
+
+
+@register_test_case(module_factory=lambda: UpSampleNearest2d())
+def UpSampleNearest2d_basic(module, tu: TestUtils):
+    module.forward(tu.rand(1, 1, 6, 12).to(torch.float64))
+
 class UpSampleNearest2dSameSize(torch.nn.Module):
 
     def __init__(self):
@@ -727,7 +748,8 @@ class UpSampleNearest2dSameSize(torch.nn.Module):
     def forward(self, inputVec):
         return torch._C._nn.upsample_nearest2d(inputVec,
                                                output_size=[11, 11],
-                                               scale_factors=None)
+                                               scales_h=None,
+                                               scales_w=None)
 
 
 @register_test_case(module_factory=lambda: UpSampleNearest2dSameSize())
@@ -745,48 +767,10 @@ class UpSampleNearest2dDiffSize(torch.nn.Module):
     def forward(self, inputVec):
         return torch._C._nn.upsample_nearest2d(inputVec,
                                                output_size=[8, 11],
-                                               scale_factors=None)
+                                               scales_h=None,
+                                               scales_w=None)
 
 
 @register_test_case(module_factory=lambda: UpSampleNearest2dDiffSize())
 def UpSampleNearest2dDynamicSize_basic(module, tu: TestUtils):
     module.forward(tu.rand(2, 3, 2, 2))
-
-
-class UpSampleNearest2dDiffFactor(torch.nn.Module):
-
-    def __init__(self):
-        super().__init__()
-
-    @export
-    @annotate_args([None, ([-1, -1, -1, -1], torch.float32, True)])
-    def forward(self, inputVec):
-        return torch._C._nn.upsample_nearest2d(inputVec,
-                                               output_size=None,
-                                               scale_factors=[2.3, 4.7])
-
-
-@register_test_case(module_factory=lambda: UpSampleNearest2dDiffFactor())
-def UpSampleNearest2dDynamicFactor_basic(module, tu: TestUtils):
-    module.forward(tu.rand(2, 3, 2, 2))
-
-
-class UpSampleNearest2dSameFactor(torch.nn.Module):
-
-    def __init__(self):
-        super().__init__()
-
-    @export
-    @annotate_args([
-        None,
-        ([-1, -1, -1, -1], torch.float32, True),
-    ])
-    def forward(self, inputVec):
-        return torch._C._nn.upsample_nearest2d(inputVec,
-                                               output_size=None,
-                                               scale_factors=[2.0, 2.0])
-
-
-@register_test_case(module_factory=lambda: UpSampleNearest2dSameFactor())
-def UpSampleNearest2dStaticFactor_basic(module, tu: TestUtils):
-    module.forward(tu.rand(2, 3, 4, 4))
