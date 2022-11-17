@@ -1366,11 +1366,18 @@ public:
     Value input = op.self();
     Value output = op.result();
     BaseTensorType outputTensorType = output.getType().cast<BaseTensorType>();
-    Value sum =
-        rewriter.create<AtenSumOp>(loc, outputTensorType, input, op.dtype());
+    Type newOutputType = outputTensorType.getWithSizesAndDtype(
+        outputTensorType.getSizes(), rewriter.getF64Type());
+    Value sum = rewriter.create<AtenSumOp>(
+        loc, newOutputType, input,
+        rewriter.create<Torch::ConstantIntOp>(
+            loc, rewriter.getI64IntegerAttr(
+                     (int)getScalarTypeForType(rewriter.getF64Type()))));
     Value numTensorElements = rewriter.create<AtenNumelOp>(loc, input);
-    rewriter.replaceOpWithNewOp<AtenDivScalarOp>(op, outputTensorType, sum,
-                                                 numTensorElements);
+    Value mean = rewriter.create<AtenDivScalarOp>(loc, newOutputType, sum,
+                                                  numTensorElements);
+    rewriter.replaceOp(op, convertTensorToDtype(rewriter, loc, mean,
+                                                outputTensorType.getDtype()));
     return success();
   }
 };
@@ -1390,7 +1397,10 @@ public:
     Value dimList = op.dim();
     Value keepDim = op.keepdim();
     Value dtype = op.dtype();
-    Type outputType = op.getType();
+    BaseTensorType outputTensorType =
+        op.result().getType().cast<BaseTensorType>();
+    Type newOutputType = outputTensorType.getWithSizesAndDtype(
+        outputTensorType.getSizes(), rewriter.getF64Type());
     MLIRContext *context = op.getContext();
 
     BaseTensorType inputType = input.getType().cast<BaseTensorType>();
@@ -1409,7 +1419,7 @@ public:
 
     // Compute sum along dimensions specified in `dimList`.
     Value sumAlongDims = rewriter.create<AtenSumDimIntListOp>(
-        loc, outputType, input, dimList, keepDim, dtype);
+        loc, newOutputType, input, dimList, keepDim, dtype);
 
     // `productDimSize` is product of sizes of dimensions to be reduced.
     Value productDimSize;
@@ -1425,8 +1435,11 @@ public:
             rewriter.create<AtenMulIntOp>(loc, productDimSize, dimSize);
       }
     }
-    rewriter.replaceOpWithNewOp<AtenDivScalarOp>(op, outputType, sumAlongDims,
-                                                 productDimSize);
+    Value meanDim = rewriter.create<AtenDivScalarOp>(
+        loc, newOutputType, sumAlongDims, productDimSize);
+    rewriter.replaceOp(op, convertTensorToDtype(rewriter, loc, meanDim,
+                                                outputTensorType.getDtype()));
+
     return success();
   }
 };
@@ -2760,13 +2773,14 @@ class DecomposeAtenNumpyTOp : public OpRewritePattern<AtenNumpyTOp> {
 
 template <typename OpTy>
 static LogicalResult calculateVariance(OpTy op, PatternRewriter &rewriter,
-                                       bool unbiased, int64_t correction) {
+                                       bool unbiased, int64_t correction,
+                                       Type outputType,
+                                       SmallVector<Value> &results) {
   Location loc = op.getLoc();
   Value self = op.self();
   Value dimList = op.dim();
   Value keepDim = op.keepdim();
   BaseTensorType inputTensorTy = self.getType().cast<BaseTensorType>();
-  Type outputType = op.getType();
   BaseTensorType outputTensorType = outputType.cast<BaseTensorType>();
   Type newOutputType = outputTensorType.getWithSizesAndDtype(
       outputTensorType.getSizes(), rewriter.getF32Type());
@@ -2801,18 +2815,15 @@ static LogicalResult calculateVariance(OpTy op, PatternRewriter &rewriter,
         loc, Torch::ListType::get(Torch::IntType::get(op.getContext())),
         dimListElements);
   }
-  Type meanDimResultType = inputTensorTy;
-  for (unsigned i = 0; i < dimListElements.size(); i++)
-    meanDimResultType = computeReductionType(
-        rewriter, op, meanDimResultType.cast<BaseTensorType>(),
-        dimListElements[i],
-        /*keepDim=*/true);
 
   Value constantNone = rewriter.create<ConstantNoneOp>(loc);
   Value constantTrue = rewriter.create<ConstantBoolOp>(loc, true);
-  Value meanAlongDims = rewriter.create<AtenMeanDimOp>(
-      loc, meanDimResultType, self, dimList, /*keepDim=*/constantTrue,
-      /*dtype=*/constantNone);
+  Value meanAlongDims =
+      rewriter.create<AtenMeanDimOp>(loc, newOutputType, self, dimList, keepDim,
+                                     /*dtype=*/constantNone);
+  Value meanToBack = convertTensorToDtype(rewriter, loc, meanAlongDims,
+                                          outputTensorType.getDtype());
+  results.push_back(meanToBack);
   Value subMean =
       createTensorSub(rewriter, loc, inputTensorTy, self, meanAlongDims);
   Value square = rewriter.create<AtenSquareOp>(loc, inputTensorTy, subMean);
@@ -2822,7 +2833,7 @@ static LogicalResult calculateVariance(OpTy op, PatternRewriter &rewriter,
         loc, newOutputType, square, dimList, keepDim, /*dtype=*/constantNone);
     result = convertTensorToDtype(rewriter, loc, result,
                                   outputTensorType.getDtype());
-    rewriter.replaceOp(op, result);
+    results.push_back(result);
     return success();
   }
   // Divide the square sum by productDimSize - correction.
@@ -2855,7 +2866,7 @@ static LogicalResult calculateVariance(OpTy op, PatternRewriter &rewriter,
                                                   productDimSizeSubCorrection);
   result =
       convertTensorToDtype(rewriter, loc, result, outputTensorType.getDtype());
-  rewriter.replaceOp(op, result);
+  results.push_back(result);
   return success();
 }
 
@@ -2878,9 +2889,11 @@ public:
           op, "Only support constant unbiased for aten.var");
     }
     int64_t correction = unbiased ? 1 : 0;
-    if (failed(calculateVariance<AtenVarDimOp>(op, rewriter, unbiased,
-                                               correction)))
+    SmallVector<Value> results;
+    if (failed(calculateVariance<AtenVarDimOp>(
+            op, rewriter, unbiased, correction, op.getType(), results)))
       return rewriter.notifyMatchFailure(op, "invalid variance parameters");
+    rewriter.replaceOp(op, results[1]);
     return success();
   }
 };
@@ -2907,9 +2920,11 @@ public:
       correction = 1;
     }
     bool unbiased = correction == 0 ? false : true;
-    if (failed(calculateVariance<AtenVarCorrectionOp>(op, rewriter, unbiased,
-                                                      correction)))
+    SmallVector<Value> results;
+    if (failed(calculateVariance<AtenVarCorrectionOp>(
+            op, rewriter, unbiased, correction, op.getType(), results)))
       return rewriter.notifyMatchFailure(op, "invalid variance parameters");
+    rewriter.replaceOp(op, results[1]);
     return success();
   }
 };
@@ -3140,12 +3155,32 @@ public:
                                 PatternRewriter &rewriter) const override {
     Location loc = op.getLoc();
     Value noneVal = rewriter.create<ConstantNoneOp>(loc);
-    Value var = rewriter.create<AtenVarCorrectionOp>(
-        loc, op.getType(0), op.self(), op.dim(), op.correction(), op.keepdim());
-    Value mean =
-        rewriter.create<AtenMeanDimOp>(loc, op.getType(0), op.self(), op.dim(),
-                                       op.keepdim(), /*dtype=*/noneVal);
-    rewriter.replaceOp(op, {var, mean});
+    Type varResultType = op->getResultTypes()[0];
+    Type meanResultType = op->getResultTypes()[1];
+
+    int64_t correction;
+    if (!op.correction().getType().isa<Torch::NoneType>()) {
+      if (!matchPattern(op.correction(), m_TorchConstantInt(&correction)))
+        return rewriter.notifyMatchFailure(
+            op, "Only support constant int correction for aten.var");
+    } else {
+      // The default value in case of `correction` being None is 1.
+      correction = 1;
+    }
+    bool unbiased = correction == 0 ? false : true;
+    SmallVector<Value> results;
+    if (failed(calculateVariance<AtenVarMeanCorrectionOp>(
+            op, rewriter, unbiased, correction, varResultType, results)))
+      return rewriter.notifyMatchFailure(op, "invalid variance parameters");
+
+    //auto broadcastSizeType =
+        //Torch::ListType::get(Torch::IntType::get(op->getContext()));
+    //Value broadcastSize =
+        //rewriter.create<AtenSizeOp>(loc, broadcastSizeType, results[1]);
+    //results[0] = rewriter.create<AtenViewOp>(loc, meanResultType, results[0],
+                                             //broadcastSize);
+
+    rewriter.replaceOp(op, {results[1], results[0]});
     return success();
   }
 };
