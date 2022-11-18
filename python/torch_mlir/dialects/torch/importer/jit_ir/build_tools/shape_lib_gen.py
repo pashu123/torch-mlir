@@ -919,6 +919,9 @@ def aten〇squeeze〇dim(self: List[int], dim: int) -> List[int]:
 def prim〇NumToTensor〇Scalar(a: float) -> List[int]:
     return []
 
+def prims〇convert_element_type(a: List[int], dtype: int) -> List[int]:
+    return upstream_shape_functions.unary(a)
+
 def aten〇tensor〇float(t: float, dtype: Optional[int] = None, device: Optional[device] = None, requires_grad: bool = False) -> List[int]:
     return []
 

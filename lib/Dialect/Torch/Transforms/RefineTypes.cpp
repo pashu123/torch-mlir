@@ -1076,6 +1076,11 @@ void TypeAnalysis::visitOperation(Operation *op,
     return;
   }
 
+  if (auto toDtype = dyn_cast<PrimsConvertElementTypeOp>(op)) {
+    visitAtenToDtypeLikeOp<PrimsConvertElementTypeOp>(toDtype, operands);
+    return;
+  }
+
   if (auto toDtypeLayout = dyn_cast<AtenToDtypeLayoutOp>(op)) {
     visitAtenToDtypeLikeOp<AtenToDtypeLayoutOp>(toDtypeLayout, operands);
     return;

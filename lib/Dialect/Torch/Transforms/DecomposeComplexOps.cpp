@@ -2749,6 +2749,26 @@ class DecomposeAtenFloorDivideOp : public OpRewritePattern<AtenFloorDivideOp> {
 } // namespace
 
 namespace {
+class DecomposePrimsConvertElementTypeOp
+    : public OpRewritePattern<PrimsConvertElementTypeOp> {
+  using OpRewritePattern::OpRewritePattern;
+  LogicalResult matchAndRewrite(PrimsConvertElementTypeOp op,
+                                PatternRewriter &rewriter) const override {
+
+    Location loc = op.getLoc();
+    Value none = rewriter.create<ConstantNoneOp>(loc);
+    Value cstFalse = rewriter.create<ConstantBoolOp>(loc, false);
+    Type resultType = op.getType();
+
+    rewriter.replaceOpWithNewOp<AtenToDtypeOp>(
+        op, resultType, op.a(), op.dtype(), /*non_blocking=*/cstFalse,
+        /*copy=*/cstFalse, /*memory_format=*/none);
+    return success();
+  }
+};
+} // namespace
+
+namespace {
 // Decompose `aten.numpy_T` op into `aten.permute` op.
 class DecomposeAtenNumpyTOp : public OpRewritePattern<AtenNumpyTOp> {
   using OpRewritePattern::OpRewritePattern;
@@ -3391,6 +3411,8 @@ public:
     target.addIllegalOp<AtenRandintLowOp>();
     patterns.add<DecomposeAtenVarMeanCorrectionOp>(context);
     target.addIllegalOp<AtenVarMeanCorrectionOp>();
+    patterns.add<DecomposePrimsConvertElementTypeOp>(context);
+    target.addIllegalOp<PrimsConvertElementTypeOp>();
 
     for (std::string opName : legalOps) {
       target.addLegalOp(OperationName(opName, context));
