@@ -506,12 +506,12 @@ public:
       return rewriter.create<arith::IndexCastOp>(loc, intType, v);
     };
 
-    SmallVector<Value> paddingIntValues;
-    if (!getListConstructElements(op.getPadding(), paddingIntValues))
+    SmallVector<int64_t> paddingInts;
+    if (!matchPattern(op.getPadding(), m_TorchListOfConstantInts(paddingInts))) {
       return rewriter.notifyMatchFailure(
-          op, "only support padding from a list construct");
-    paddingIntValues = getTypeConvertedValues(rewriter, loc, getTypeConverter(),
-                                              paddingIntValues);
+          op, "only support constant padding values");
+    }
+
     SmallVector<int64_t> strideInts;
     if (!matchPattern(op.getStride(), m_TorchListOfConstantInts(strideInts)))
       return rewriter.notifyMatchFailure(op,
@@ -554,6 +554,8 @@ public:
              "invalid: groups must divide weight batch size evenly.");
     SmallVector<Value> dilationIntValues =
         getAsConstantIntValues(rewriter, loc, dilationInts);
+    SmallVector<Value> paddingIntValues =
+        getAsConstantIntValues(rewriter, loc, paddingInts);
     SmallVector<Value> strideIntValues =
         getAsConstantIntValues(rewriter, loc, strideInts);
 
@@ -651,9 +653,11 @@ public:
 
     } else {
       // Pad input
-      paddedInput = torch_to_linalg::getDynamicZeroPaddedTensor(
-          op, rewriter, input, paddingIntValues, /*unpaddedDims=*/2);
-
+      SmallVector<int64_t, 4> paddingIncludingNC = {0, 0};
+      paddingIncludingNC.insert(paddingIncludingNC.end(), paddingInts.begin(),
+                                paddingInts.end());
+      paddedInput = torch_to_linalg::getZeroPaddedTensor(op, rewriter, input,
+                                                         paddingIncludingNC);
       // Calculate output dims
       for (size_t i = 0; i < numSpacialDims; i++)
         outDims.push_back(torch_to_linalg::getOutputDimForConvOps(
