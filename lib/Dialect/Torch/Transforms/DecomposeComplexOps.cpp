@@ -1336,6 +1336,88 @@ public:
 };
 } // namespace
 
+//def _view_as_real(self, x: torch.Tensor):
+    //z = torch.flatten(x.real)
+    //zimg = torch.flatten(x.imag)
+    //tensors = (z, zimg)
+    //z = torch.cat(tensors, dim=-1)
+    //return z.reshape(*x.shape,2)
+namespace {
+class DecomposeAtenViewAsRealOp : public OpRewritePattern<AtenViewAsRealOp> {
+public:
+  using OpRewritePattern::OpRewritePattern;
+  LogicalResult matchAndRewrite(AtenViewAsRealOp op,
+                                PatternRewriter &rewriter) const override {
+    Location loc = op.getLoc();
+    Value self = op.getSelf();
+    BaseTensorType inputType = self.getType().cast<BaseTensorType>();
+    std::optional<unsigned> maybeInputRank = getTensorRank(self);
+    if (!maybeInputRank) {
+      return rewriter.notifyMatchFailure(
+          op, "expected input tensor to have a rank");
+    }
+    unsigned inputRank = *maybeInputRank;
+    BaseTensorType resultType = op.getResult().getType().cast<BaseTensorType>();
+    Type realTy = inputType.getWithSizesAndDtype(inputType.getSizes(),
+                                                 resultType.getOptionalDtype());
+    if (!resultType.hasDtype()) {
+      return failure();
+    }
+    Value real = rewriter.create<AtenRealOp>(loc, realTy, self);
+    Value imag = rewriter.create<AtenImagOp>(loc, realTy, self);
+    BaseTensorType flattenType =
+        inputType
+            .getWithSizesAndDtype({kUnknownSize}, resultType.getOptionalDtype())
+            .cast<BaseTensorType>();
+    Value dim = rewriter.create<ConstantIntOp>(loc, rewriter.getI64IntegerAttr(0));
+    Value end = rewriter.create<ConstantIntOp>(
+        loc, rewriter.getI64IntegerAttr(inputRank-1));
+    Value flattenedReal = rewriter.create<AtenFlattenUsingIntsOp>(
+        loc, flattenType, real, dim, end);
+    Value flattenedImag = rewriter.create<AtenFlattenUsingIntsOp>(
+        loc, flattenType, imag, dim, end);
+    int catDim = inputRank;
+    ArrayRef<int64_t> inputShape = resultType.getSizes();
+    for(int i: inputShape)
+        llvm::errs()<<i<<"\n";
+
+    llvm::errs()<<catDim<<"\n";
+
+    SmallVector<int64_t> sizes;
+    sizes.append(inputShape.begin(), inputShape.end());
+    sizes[catDim] = kUnknownSize;
+    Type catTy = inputType.getWithSizesAndDtype(llvm::ArrayRef(sizes),
+                                                inputType.getOptionalDtype());
+    llvm::errs()<<"Hey I am here"<<"\n";
+    Type listType =
+        Torch::ListType::get(flattenedReal.getType().cast<BaseTensorType>());
+    Value slices = rewriter.create<PrimListConstructOp>(
+        loc, listType, llvm::ArrayRef<Value>{flattenedReal, flattenedImag});
+    llvm::errs()<<"Hey I am here"<<"\n";
+    Value catRes =  rewriter.create<AtenCatOp>(loc, flattenType, slices, dim);
+    auto reshapeListTy = Torch::ListType::get(Torch::IntType::get(op.getContext()));
+    SmallVector<Value> resultSizes;
+    for (int64_t shape : inputShape) {
+      Value dimSize = rewriter.create<Torch::ConstantIntOp>(
+          loc, rewriter.getI64IntegerAttr(shape));
+      resultSizes.push_back(dimSize);
+    }
+    llvm::errs()<<"Hey I am here"<<"\n";
+    //Value dimSize = rewriter.create<Torch::ConstantIntOp>(
+        //loc, rewriter.getI64IntegerAttr(2));
+    //resultSizes.push_back(dimSize);
+    ModuleOp module = op->getParentOfType<ModuleOp>();
+    module.dump();
+    llvm::errs()<<"Hey I am here"<<"\n";
+    Value reshapedDims =
+        rewriter.create<PrimListConstructOp>(loc, reshapeListTy, resultSizes);
+    rewriter.replaceOpWithNewOp<AtenViewOp>(op, resultType, catRes,
+                                            reshapedDims);
+    return success();
+  }
+};
+} // namespace
+
 // Decompose aten.where.Scalar into aten.where.self op.
 namespace {
 class DecomposeAtenWhereScalarOp : public OpRewritePattern<AtenWhereScalarOp> {

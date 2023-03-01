@@ -285,8 +285,8 @@ def compile(model: torch.nn.Module,
     """
     output_type = OutputType.get(output_type)
     example_args = ExampleArgs.get(example_args)
-    if ignore_traced_shapes and not use_tracing:
-        raise Exception("`ignore_traced_shapes` requires `use_tracing`")
+    # if ignore_traced_shapes and not use_tracing:
+        # raise Exception("`ignore_traced_shapes` requires `use_tracing`")
 
     # We only allow `backend_legal_ops` to be specified for the `"torch"`
     # output type because the other output types actually invoke their

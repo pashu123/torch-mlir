@@ -269,6 +269,54 @@ def aten〇pow〇Tensor_Tensor〡shape(self: List[int], exponent: List[int]) -> 
 def aten〇rsub〇Scalar〡shape(self: List[int], other: float, alpha: float = 1) -> List[int]:
     return upstream_shape_functions.unary(self)
 
+def aten〇real〡shape(self: List[int]) -> List[int]:
+    return upstream_shape_functions.unary(self)
+
+def aten〇imag〡shape(self: List[int]) -> List[int]:
+    return upstream_shape_functions.unary(self)
+
+def aten〇view_as_complex〡shape(self: List[int]) -> List[int]:
+    out: List[int] = []
+    for elem in self[:-1]:
+        out.append(elem)
+    return out
+
+def aten〇view_as_real〡shape(self: List[int]) -> List[int]:
+    out: List[int] = []
+    for elem in self:
+        out.append(elem)
+    out.append(2)
+    return upstream_shape_functions.unary(out)
+
+def complex_to_float(self_rank: int, self_dtype: int) -> int:
+    if self_dtype == torch.complex64:
+        return torch.float
+    if self_dtype == torch.complex128:
+        return torch.double
+    else:
+        assert False, "Unsupported dtype"
+
+def aten〇real〡dtype(self_rank: int, self_dtype: int) -> int:
+    return complex_to_float(self_rank, self_dtype)
+
+def aten〇imag〡dtype(self_rank: int, self_dtype: int) -> int:
+    return complex_to_float(self_rank, self_dtype)
+
+def aten〇view_as_real〡dtype(self_rank: int, self_dtype: int) -> int:
+    return complex_to_float(self_rank, self_dtype)
+
+def aten〇view_as_complex〡dtype(self_rank: int, self_dtype: int) -> int:
+    if self_dtype == torch.float:
+        return torch.complex64
+    elif self_dtype == torch.double:
+        return torch.complex128
+    elif self_dtype == torch.bool or self_dtype == torch.uint8 or \
+         self_dtype == torch.int8 or self_dtype == torch.int16 or \
+         self_dtype == torch.int32 or self_dtype == torch.int64:
+        return torch.complex64
+    else:
+        assert False, "Unsupported dtype"
+
 @check_dtype_function([
     Invocation(NonZeroDTensorWithDtype(torch.float32), other=0),
     Invocation(NonZeroDTensorWithDtype(torch.int64), other=0.0),

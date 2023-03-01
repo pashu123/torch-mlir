@@ -203,7 +203,9 @@ bool Torch::isViewLikeOp(Operation *op) {
              AtenSqueezeDimOp, AtenSqueezeOp, AtenTOp, AtenToDtypeOp,
              AtenTransposeIntOp, AtenUnsqueezeOp, AtenViewOp,
              TensorStaticInfoCastOp, AtenToDtypeLayoutOp, AtenNumpyTOp,
-             AtenNarrowOp, AtenToDeviceOp>(op);
+             AtenNarrowOp, AtenToDeviceOp, AtenViewAsRealOp,
+             AtenViewAsComplexOp, AtenRealOp, AtenImagOp>(
+      op);
 }
 
 Value Torch::getConstantWithGivenDtypeAndValue(PatternRewriter &rewriter,

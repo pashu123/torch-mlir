@@ -243,7 +243,7 @@ public:
   LowerToBackendContractPass() = default;
   LowerToBackendContractPass(int maxIterations, bool decompose,
                              ArrayRef<std::string> backendLegalOps) {
-    this->maxIterations = maxIterations;
+    this->maxIterations = 200;
     this->decompose = decompose;
     this->backendLegalOps = backendLegalOps;
   }

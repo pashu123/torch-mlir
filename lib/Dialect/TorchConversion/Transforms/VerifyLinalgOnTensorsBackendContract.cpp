@@ -16,6 +16,7 @@
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/MLProgram/IR/MLProgram.h"
 #include "mlir/Dialect/Math/IR/Math.h"
+#include "mlir/Dialect/Complex/IR/Complex.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/IR/OpDefinition.h"
@@ -51,6 +52,7 @@ class VerifyLinalgOnTensorsBackendContractPass
       c->addConversion([](FloatType type) { return type; });
       c->addConversion([](IntegerType type) { return type; });
       c->addConversion([](IndexType type) { return type; });
+      c->addConversion([](ComplexType type) { return type; });
     }
 
     auto opHasLegalTypes = [&](Operation *op) { return converter.isLegal(op); };
@@ -72,6 +74,7 @@ class VerifyLinalgOnTensorsBackendContractPass
     // Basic scalar operations.
     target.addDynamicallyLegalDialect<func::FuncDialect>(isLegalScalarOp);
     target.addDynamicallyLegalDialect<math::MathDialect>(isLegalScalarOp);
+    target.addDynamicallyLegalDialect<complex::ComplexDialect>(isLegalScalarOp);
     target.addDynamicallyLegalDialect<arith::ArithDialect>(isLegalScalarOp);
 
     // Tensor operations should go through linalg and the tensor dialect.
@@ -86,6 +89,7 @@ class VerifyLinalgOnTensorsBackendContractPass
 
     // ConstantOp is used for tensors and for scalars.
     target.addDynamicallyLegalOp<arith::ConstantOp>(opHasLegalTypes);
+    target.addDynamicallyLegalOp<complex::CreateOp>(opHasLegalTypes);
 
     RewritePatternSet patterns(context);
     if (failed(applyFullConversion(module, target, std::move(patterns)))) {

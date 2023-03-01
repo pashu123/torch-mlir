@@ -300,7 +300,7 @@ def emit_ops(emitter_td: TextEmitter, registry: Registry):
             "aten::unsqueeze : (Tensor, int) -> (Tensor)",
             "aten::zero : (Tensor) -> (Tensor)",
             "aten::fill.Scalar : (Tensor, Scalar) -> (Tensor)",
-            "aten::fill.Tensor : (Tensor, Tensor) -> (Tensor)"
+            "aten::fill.Tensor : (Tensor, Tensor) -> (Tensor)",
     ]:
         emit_with_mutating_variants(key)
     # Elementwise tensor compute ops that don't have the standard mutating
@@ -326,6 +326,11 @@ def emit_ops(emitter_td: TextEmitter, registry: Registry):
     emit("aten::floor_divide : (Tensor, Tensor) -> (Tensor)")
     emit("aten::softplus : (Tensor, Scalar, Scalar) -> (Tensor)")
     emit("aten::prelu : (Tensor, Tensor) -> (Tensor)")
+    emit("aten::view_as_real : (Tensor) -> (Tensor)")
+    emit("aten::view_as_complex : (Tensor) -> (Tensor)")
+    emit("aten::real : (Tensor) -> (Tensor)")
+    emit("aten::imag : (Tensor) -> (Tensor)")
+    emit("aten::sym_size.int : (Tensor, int) -> (int)")
 
     # Random number generation
     emit_with_mutating_variants("aten::uniform : (Tensor, float, float, Generator?) -> (Tensor)")

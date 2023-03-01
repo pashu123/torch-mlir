@@ -9,6 +9,7 @@ import torch
 from torch._functorch.compile_utils import strip_overloads
 from torch._decomp import get_decompositions
 from torch._dynamo.backends.common import aot_autograd
+from torch._decomp import register_decomposition
 import functorch
 
 import warnings
@@ -62,7 +63,9 @@ def _get_decomposition_table():
         aten.native_group_norm_backward,
         aten.sigmoid_backward,
         aten._native_batch_norm_legit,
-        aten._native_batch_norm_legit_no_training
+        aten._native_batch_norm_legit_no_training,
+        aten.stack,
+        aten.view_as_real,
     ])
 
 

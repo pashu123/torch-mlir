@@ -16,6 +16,7 @@
 #include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/Math/IR/Math.h"
+#include "mlir/Dialect/Complex/IR/Complex.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/IR/Matchers.h"
 #include "torch-mlir/Conversion/Utils/Utils.h"
@@ -507,7 +508,7 @@ static Value createLinalgPayloadCalculationForElementwiseOp(
     if (dtype.isa<mlir::FloatType>()) {
       return b.create<arith::MulFOp>(loc, lhs, rhs);
     } else {
-      return b.create<arith::MulIOp>(loc, lhs, rhs);
+      return b.create<complex::MulOp>(loc, lhs, rhs);
     }
   }
   if (auto atan2 = dyn_cast<AtenAtan2Op>(op)) {
@@ -619,6 +620,32 @@ static Value createLinalgPayloadCalculationForElementwiseOp(
     Value lhs = convertScalarToDtype(b, loc, payloadArgs[0], dtype);
     Value rhs = convertScalarToDtype(b, loc, payloadArgs[1], dtype);
     return b.create<math::PowFOp>(loc, lhs, rhs);
+  }
+
+  if (auto imag = dyn_cast<AtenImagOp>(op)) {
+    Type dtype = converter->convertType(imag.getType())
+                     .cast<RankedTensorType>()
+                     .getElementType();
+    if (!dtype.isa<mlir::FloatType>()) {
+      imag.emitError("unimplemented: non-floating point dtype");
+      return nullptr;
+    }
+    Value imagVal =  b.create<complex::ImOp>(loc, payloadArgs[0]);
+    Value result = convertScalarToDtype(b, loc, imagVal, dtype);
+    return result;
+  }
+
+  if (auto real = dyn_cast<AtenRealOp>(op)) {
+    Type dtype = converter->convertType(real.getType())
+                     .cast<RankedTensorType>()
+                     .getElementType();
+    if (!dtype.isa<mlir::FloatType>()) {
+      real.emitError("unimplemented: non-floating point dtype");
+      return nullptr;
+    }
+    Value realVal =  b.create<complex::ReOp>(loc, payloadArgs[0]);
+    Value result = convertScalarToDtype(b, loc, realVal, dtype);
+    return result;
   }
 
   if (auto gtScalar = dyn_cast<AtenGtScalarOp>(op)) {
@@ -1093,10 +1120,10 @@ public:
              AtenCeilOp, AtenGtTensorOp, AtenGeTensorOp, AtenEqTensorOp,
              AtenLtTensorOp, AtenLeTensorOp, AtenSubScalarOp, AtenAddScalarOp,
              AtenThresholdOp, AtenThresholdBackwardOp, AtenCloneOp, AtenSinOp,
-             AtenCosOp, AtenNeScalarOp, AtenNegOp,
-             AtenMaskedFillTensorOp, AtenLogicalOrOp, AtenLogicalAndOp,
-             AtenLogicalXorOp, AtenLogicalNotOp, AtenTriuOp, AtenBitwiseNotOp,
-             AtenRoundOp, AtenFillScalarOp, AtenFillTensorOp>(op))
+             AtenCosOp, AtenNeScalarOp, AtenNegOp, AtenMaskedFillTensorOp,
+             AtenLogicalOrOp, AtenLogicalAndOp, AtenLogicalXorOp,
+             AtenLogicalNotOp, AtenTriuOp, AtenBitwiseNotOp, AtenRoundOp,
+             AtenFillScalarOp, AtenFillTensorOp, AtenImagOp, AtenRealOp>(op))
       return rewriter.notifyMatchFailure(op, "not a supported elementwise op");
 
     if (failed(verifyLinalgCompatibleTypes(op, rewriter)))
@@ -1571,10 +1598,10 @@ void mlir::torch::torch_to_linalg::populateUncategorizedPatternsAndLegality(
       AtenGeScalarOp, AtenEqScalarOp, AtenLtScalarOp, AtenLeScalarOp,
       AtenWhereSelfOp, AtenGtTensorOp, AtenGeTensorOp, AtenEqTensorOp,
       AtenLtTensorOp, AtenLeTensorOp, AtenThresholdOp, AtenThresholdBackwardOp,
-      AtenCloneOp, AtenSinOp, AtenCosOp, AtenNeScalarOp,
-      AtenMaskedFillTensorOp, AtenLogicalOrOp, AtenLogicalAndOp,
-      AtenLogicalXorOp, AtenLogicalNotOp, AtenTriuOp, AtenRemainderScalarOp,
-      AtenBitwiseNotOp, AtenRoundOp, AtenFillScalarOp, AtenFillTensorOp>();
+      AtenCloneOp, AtenSinOp, AtenCosOp, AtenNeScalarOp, AtenMaskedFillTensorOp,
+      AtenLogicalOrOp, AtenLogicalAndOp, AtenLogicalXorOp, AtenLogicalNotOp,
+      AtenTriuOp, AtenRemainderScalarOp, AtenBitwiseNotOp, AtenRoundOp,
+      AtenFillScalarOp, AtenFillTensorOp, AtenImagOp, AtenRealOp>();
   patterns.add<ConvertElementwiseOp>(typeConverter, context);
   target.addIllegalOp<AtenNllLossForwardOp>();
   patterns.add<ConvertAtenDetachOp>(typeConverter, context);

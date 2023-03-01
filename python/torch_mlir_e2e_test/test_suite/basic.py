@@ -3349,3 +3349,23 @@ class AtenFloatScalarModule(torch.nn.Module):
 @register_test_case(module_factory=lambda: AtenFloatScalarModule())
 def AtenFloatScalarModule_basic(module, tu: TestUtils):
     module.forward(tu.randint(high=5))
+
+# ==============================================================================
+
+class AtenViewAsRealModule(torch.nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([5,2], torch.complex64, True),
+    ])
+    def forward(self, x):
+        return torch.view_as_real(x)
+
+
+@register_test_case(module_factory=lambda: AtenViewAsRealModule())
+def AtenViewAsRealModule_basic(module, tu: TestUtils):
+    module.forward(tu.rand(5,2).to(torch.complex64))

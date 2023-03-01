@@ -1,5 +1,3 @@
-//===----------------------------------------------------------------------===//
-//
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
@@ -17,6 +15,7 @@
 #include "PopulatePatterns.h"
 #include "Utils.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
+#include "mlir/Dialect/Complex/IR/Complex.h"
 #include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
@@ -666,8 +665,9 @@ public:
         intermediateShape.push_back(sum);
       }
 
-      Type intermediateResultType = RankedTensorType::get(
-          makeShapeLLVMCompatible(intermediateShape), resultType.getElementType());
+      Type intermediateResultType =
+          RankedTensorType::get(makeShapeLLVMCompatible(intermediateShape),
+                                resultType.getElementType());
 
       expandedInput =
           rewriter
@@ -1032,10 +1032,10 @@ public:
     for (unsigned i = 0; i < inputRank; i++)
       swapExprs.push_back(idExprs[dimensions[i]]);
 
-    AffineMap inputMap = AffineMap::get(inputRank, /*symbolCount=*/0, idExprs,
-                                        op->getContext());
-    AffineMap outputMap = AffineMap::get(inputRank, /*symbolCount=*/0, swapExprs,
-                                         op->getContext());
+    AffineMap inputMap =
+        AffineMap::get(inputRank, /*symbolCount=*/0, idExprs, op->getContext());
+    AffineMap outputMap = AffineMap::get(inputRank, /*symbolCount=*/0,
+                                         swapExprs, op->getContext());
     SmallVector<AffineMap> indexingMaps{inputMap, outputMap};
     SmallVector<utils::IteratorType> iteratorTypes(
         inputRank, utils::IteratorType::parallel);
@@ -1215,7 +1215,8 @@ public:
       return failure();
 
     Type resultType = getTypeConverter()->convertType(op.getType());
-    rewriter.replaceOpWithNewOp<tensor::CastOp>(op, resultType, adaptor.getSelf());
+    rewriter.replaceOpWithNewOp<tensor::CastOp>(op, resultType,
+                                                adaptor.getSelf());
     return success();
   }
 };
@@ -1338,6 +1339,196 @@ public:
 };
 } // namespace
 
+namespace {
+class ConvertAtenViewAsComplexOp
+    : public OpConversionPattern<AtenViewAsComplexOp> {
+public:
+  using OpConversionPattern::OpConversionPattern;
+  LogicalResult
+  matchAndRewrite(AtenViewAsComplexOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+
+    if (failed(verifyLinalgCompatibleTypes(op, rewriter)))
+      return failure();
+
+    Location loc = op.getLoc();
+    TypeConverter *typeConverter = getTypeConverter();
+    MLIRContext *context = rewriter.getContext();
+
+    auto input = adaptor.getSelf();
+    RankedTensorType inputType = input.getType().cast<RankedTensorType>();
+    unsigned inputRank = inputType.getRank();
+
+    RankedTensorType resultType =
+        typeConverter->convertType(op->getResult(0).getType())
+            .cast<RankedTensorType>();
+
+    auto elementType = resultType.getElementType();
+
+    SmallVector<Value> resultShape;
+    for (int64_t i = 0; i < inputRank - 1; i++) {
+      auto currentDimSize = rewriter.create<tensor::DimOp>(loc, input, i);
+      resultShape.push_back(currentDimSize);
+    }
+
+    Value outTensor = rewriter.create<tensor::EmptyOp>(
+        loc, resultType.getShape(), elementType);
+
+    //SmallVector<AffineExpr> inputZeroIndexExpr;
+    //SmallVector<AffineExpr> inputOneIndexExpr;
+    SmallVector<AffineExpr> outputExpr;
+    for (unsigned i = 0; i < resultType.getRank(); i++) {
+      outputExpr.push_back(getAffineDimExpr(i, context));
+    }
+
+    // inputZeroIndexExpr.push_back(getAffineConstantExpr(0, context));
+    // inputOneIndexExpr.push_back(getAffineConstantExpr(1, context));
+    Value constantZero =
+        getConstant(rewriter, loc, 0, mlir::IndexType::get(context));
+    Value constantOne =
+        getConstant(rewriter, loc, 1, mlir::IndexType::get(context));
+
+    AffineMap outputMap =
+        AffineMap::get(resultType.getRank(), 0, outputExpr, op->getContext());
+
+    SmallVector<AffineMap> indexingMaps{outputMap};
+    SmallVector<utils::IteratorType> iteratorTypes(
+        resultType.getRank(), utils::IteratorType::parallel);
+    auto transpose =
+        rewriter
+            .create<linalg::GenericOp>(
+                loc, resultType, ValueRange{}, outTensor, indexingMaps,
+                iteratorTypes,
+                [&](OpBuilder &b, Location loc, ValueRange args) {
+
+                SmallVector<Value> indicesZero;
+                SmallVector<Value> indicesOne;
+
+                for (int i = 0; i < resultType.getRank(); i++) {
+                  indicesZero.push_back(b.create<linalg::IndexOp>(loc, i));
+                  indicesOne.push_back(b.create<linalg::IndexOp>(loc, i));
+                }
+
+                indicesZero.push_back(constantZero);
+                indicesOne.push_back(constantOne);
+
+                Value realVal =
+                    b.create<tensor::ExtractOp>(loc, input, indicesZero);
+                Value imagVal =
+                    b.create<tensor::ExtractOp>(loc, input, indicesOne);
+                //Value convertReal = b.create<arith::ExtFOp>(
+                    //loc, mlir::FloatType::getF64(context), realVal);
+                //Value convertImag = b.create<arith::ExtFOp>(
+                    //loc, mlir::FloatType::getF64(context), imagVal);
+                Value complexVal = b.create<complex::CreateOp>(
+                    loc, elementType, realVal, imagVal);
+                b.create<linalg::YieldOp>(loc, complexVal);
+                })
+            .getResult(0);
+    rewriter.replaceOpWithNewOp<tensor::CastOp>(op, resultType, transpose);
+    return success();
+  }
+};
+} // namespace
+
+namespace {
+class ConvertAtenViewAsRealOp
+    : public OpConversionPattern<AtenViewAsRealOp> {
+public:
+  using OpConversionPattern::OpConversionPattern;
+  LogicalResult
+  matchAndRewrite(AtenViewAsRealOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+
+    if (failed(verifyLinalgCompatibleTypes(op, rewriter)))
+      return failure();
+
+    Location loc = op.getLoc();
+    TypeConverter *typeConverter = getTypeConverter();
+    MLIRContext *context = rewriter.getContext();
+
+    auto input = adaptor.getSelf();
+    RankedTensorType inputType = input.getType().cast<RankedTensorType>();
+    unsigned inputRank = inputType.getRank();
+
+    RankedTensorType resultType =
+        typeConverter->convertType(op->getResult(0).getType())
+            .cast<RankedTensorType>();
+
+    auto elementType = resultType.getElementType();
+
+    SmallVector<Value> resultShape;
+    for (int64_t i = 0; i < inputRank - 1; i++) {
+      auto currentDimSize = rewriter.create<tensor::DimOp>(loc, input, i);
+      resultShape.push_back(currentDimSize);
+    }
+
+    Value outTensor = rewriter.create<tensor::EmptyOp>(
+        loc, resultType.getShape(), elementType);
+
+    //SmallVector<AffineExpr> inputZeroIndexExpr;
+    //SmallVector<AffineExpr> inputOneIndexExpr;
+    SmallVector<AffineExpr> outputExpr;
+    SmallVector<AffineExpr> inputExpr;
+    for (unsigned i = 0; i < inputRank; i++) {
+      outputExpr.push_back(getAffineDimExpr(i, context));
+      inputExpr.push_back(getAffineDimExpr(i, context));
+    }
+
+    outputExpr.push_back(getAffineConstantExpr(0, context));
+
+
+    AffineMap inputMap =
+        AffineMap::get(inputRank, 0, inputExpr, op->getContext());
+    AffineMap outputMap =
+        AffineMap::get(inputRank, 0, outputExpr, op->getContext());
+
+    SmallVector<AffineMap> indexingMaps{inputMap, outputMap};
+    SmallVector<utils::IteratorType> iteratorTypes(
+        inputRank, utils::IteratorType::parallel);
+    auto transpose =
+        rewriter
+            .create<linalg::GenericOp>(
+                loc, resultType, input, outTensor, indexingMaps,
+                iteratorTypes,
+                [&](OpBuilder &b, Location loc, ValueRange args) {
+
+                Type complexElementType =
+                    args[0].getType().cast<ComplexType>().getElementType();
+                Value complexVal =
+                    b.create<complex::ReOp>(loc, complexElementType, args[0]);
+                //Value convertReal = b.create<arith::TruncFOp>(
+                    //loc, elementType, complexVal);
+                b.create<linalg::YieldOp>(loc, complexVal);
+                })
+            .getResult(0);
+
+    outputExpr[inputRank] = getAffineConstantExpr(1, context);
+    outputMap =
+        AffineMap::get(inputRank, 0, outputExpr, op->getContext());
+    indexingMaps[1] =  outputMap;
+    transpose =
+        rewriter
+            .create<linalg::GenericOp>(
+                loc, resultType, input, transpose, indexingMaps,
+                iteratorTypes,
+                [&](OpBuilder &b, Location loc, ValueRange args) {
+
+                Type complexElementType =
+                    args[0].getType().cast<ComplexType>().getElementType();
+                Value complexVal =
+                    b.create<complex::ImOp>(loc, complexElementType, args[0]);
+                //Value convertReal = b.create<arith::TruncFOp>(
+                    //loc, elementType, complexVal);
+                b.create<linalg::YieldOp>(loc, complexVal);
+                })
+            .getResult(0);
+    rewriter.replaceOpWithNewOp<tensor::CastOp>(op, resultType, transpose);
+    return success();
+  }
+};
+} // namespace
+
 void mlir::torch::torch_to_linalg::populateDataMovementPatternsAndLegality(
     TypeConverter &typeConverter, RewritePatternSet &patterns,
     ConversionTarget &target) {
@@ -1368,4 +1559,8 @@ void mlir::torch::torch_to_linalg::populateDataMovementPatternsAndLegality(
   patterns.add<ConvertAtenCopyOp>(typeConverter, context);
   target.addIllegalOp<AtenSliceScatterOp>();
   patterns.add<ConvertAtenSliceScatterOp>(typeConverter, context);
+  target.addIllegalOp<AtenViewAsComplexOp>();
+  patterns.add<ConvertAtenViewAsComplexOp>(typeConverter, context);
+  target.addIllegalOp<AtenViewAsRealOp>();
+  patterns.add<ConvertAtenViewAsRealOp>(typeConverter, context);
 }
