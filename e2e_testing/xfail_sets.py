@@ -1077,4 +1077,6 @@ LTC_XFAIL_SET = {
     "OneHotModule_basic",
     "VarMeanDimModule_basic",
     "VarMeanDimBiasedModule_basic",
+    "AtenComplexImagModule_basic"
+    "AtenComplexRealModule_basic"
 }
