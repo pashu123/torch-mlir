@@ -64,6 +64,8 @@ def _get_decomposition_table():
         aten._native_batch_norm_legit,
         aten._native_batch_norm_legit_no_training,
         aten.squeeze,
+        aten.stack,
+        aten.view_as_real,
     ])
 
 
