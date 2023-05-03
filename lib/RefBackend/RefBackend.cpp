@@ -67,6 +67,8 @@ static bool isArgMemRefTypeValid(Type type) {
         return true;
       if (integerTy.isSignlessInteger(1))
         return true;
+    } else if (elemTy.isa<ComplexType>()){
+        return true;
     }
   }
   return false;

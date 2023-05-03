@@ -3766,3 +3766,21 @@ class AtenComplexRealModule(torch.nn.Module):
 @register_test_case(module_factory=lambda: AtenComplexRealModule())
 def AtenComplexRealModule_basic(module, tu: TestUtils):
     module.forward(tu.rand(5,2))
+
+class AtenComplexModule(torch.nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args([
+        None,
+        ([5], torch.complex64, True),
+    ])
+    def forward(self, x):
+        return x.real
+
+
+@register_test_case(module_factory=lambda: AtenComplexModule())
+def AtenComplexModule_basic(module, tu: TestUtils):
+    module.forward(tu.rand(5,2).to(torch.complex64))
