@@ -46,9 +46,6 @@ def _embedding_bag_helper(weight: List[int], indices: List[int], offsets: List[i
 def aten〇triu〡shape(self: List[int], diagonal: int = 0) -> List[int]:
     return upstream_shape_functions.unary(self)
 
-def aten〇atan〡shape(self: List[int]) -> List[int]:
-    return upstream_shape_functions.unary(self)
-
 def aten〇tanh〡shape(self: List[int]) -> List[int]:
     return upstream_shape_functions.unary(self)
 
@@ -334,14 +331,6 @@ def aten〇var〇correction〡shape(self: List[int], dim: Optional[List[int]] = 
 def aten〇var_mean〇correction〡shape(self: List[int], dim: Optional[List[int]] = None, correction: Optional[float] = None, keepdim: bool = False) -> Tuple[List[int], List[int]]:
     out = upstream_shape_functions.sum_mean_dim(self, dim, keepdim, None)
     return out, out
-
-def aten〇var_mean〇dim〡shape(self: List[int], dim: Optional[List[int]], unbiased: bool = True, keepdim: bool = False) -> Tuple[List[int], List[int]]:
-    out = upstream_shape_functions.sum_mean_dim(self, dim, keepdim, None)
-    return out, out
-
-def aten〇var_mean〇dim〡dtype(self_rank_dtype: Tuple[int, int], dim: Optional[List[int]], unbiased: bool = True, keepdim: bool = False) -> Tuple[int, int]:
-    _, self_dtype = self_rank_dtype
-    return self_dtype, self_dtype
 
 def aten〇var_mean〡shape(self: List[int], unbiased: bool = True) -> Tuple[List[int], List[int]]:
     return [], []
@@ -785,8 +774,7 @@ def aten〇tensor〇int〡shape(t: int, dtype: Optional[int] = None, device: Opt
 def aten〇tensor〇bool〡shape(t: bool, dtype: Optional[int] = None, device: Optional[device] = None, requires_grad: bool = False) -> List[int]:
     return []
 
-# TODO: Upstream this.
-def complex_to_float(self_rank: int, self_dtype: int) -> int:
+def complex_to_float(self_dtype: int) -> int:
     if self_dtype == torch.complex32:
         return torch.half
     elif self_dtype == torch.complex64:
@@ -803,10 +791,10 @@ def aten〇imag〡shape(self: List[int]) -> List[int]:
     return upstream_shape_functions.unary(self)
 
 def aten〇real〡dtype(self_rank_dtype: Tuple[int, int]) -> int:
-    return complex_to_float(self_rank_dtype[0], self_rank_dtype[1])
+    return complex_to_float(self_rank_dtype[1])
 
 def aten〇imag〡dtype(self_rank_dtype: Tuple[int, int]) -> int:
-    return complex_to_float(self_rank_dtype[0], self_rank_dtype[1])
+    return complex_to_float(self_rank_dtype[1])
 
 def aten〇view_as_complex〡shape(self: List[int]) -> List[int]:
     out: List[int] = []
@@ -866,10 +854,6 @@ def aten〇addcdiv〡shape(self: List[int], tensor1: List[int], tensor2: List[in
 ])
 def aten〇topk〡shape(self: List[int], k: int, dim: int = -1, largest: bool = True, sorted: bool = True) -> Tuple[List[int], List[int]]:
     return upstream_shape_functions.topk(self, k, dim)
-
-def aten〇topk〡dtype(self_rank_dtype: Tuple[int, int], k: int, dim: int = -1, largest: bool = True, sorted: bool = True) -> Tuple[int, int]:
-    _, self_dtype = self_rank_dtype
-    return self_dtype, torch.int64
 
 def aten〇conv2d〡shape(input: List[int], weight: List[int], bias: Optional[List[int]] = None, stride: List[int] = (1, 1), padding: List[int] = (0, 0), dilation: List[int] = (1, 1), groups: int = 1) -> List[int]:
     return upstream_shape_functions.conv2d(input, weight, bias, stride, padding, dilation, groups)
